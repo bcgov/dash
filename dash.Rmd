@@ -8,29 +8,48 @@ output:
 
 ```{r setup, include=FALSE}
 library(flexdashboard)
+library(fpp3)
+library(DT)
+library(scales)
+#canadian_gas <- canadian_gas[1:530,]
+canadian_gas <- as_tibble(canadian_gas)
+last_month <- max(canadian_gas$Month)
+last_vol <- canadian_gas%>%
+  filter(Month==max(Month))%>%
+  pull(Volume)
+prev_vol <- canadian_gas%>%
+  filter(Month==max(Month)-1)%>%
+  pull(Volume)
+gas_growth <- percent(last_vol/prev_vol-1, accuracy = .1)
+year_of_gas <- canadian_gas%>%
+  filter(Month>max(Month)-12)
+date_range <- range(year_of_gas$Month)
+mean_gas <- year_of_gas%>%
+  summarize(Volume=round(mean(Volume),3))%>%
+  pull(Volume)
+
+
 ```
 
 Column {data-width=650}
 -----------------------------------------------------------------------
 
-### Chart A
+### The monthly growth rate in `r last_month` was `r gas_growth`.
 
 ```{r}
-
+ggplot(canadian_gas, aes(Month, Volume))+
+  geom_line()
 ```
 
 Column {data-width=350}
 -----------------------------------------------------------------------
 
-### Chart B
+### The average volume over the period `r paste(date_range, collapse="--")` was `r mean_gas`.
 
 ```{r}
+canadian_gas%>%
+  arrange(desc(Month))%>%
+  mutate(Month=as.character(Month))%>%
+  datatable()
 
 ```
-
-### Chart C
-
-```{r}
-
-```
-
