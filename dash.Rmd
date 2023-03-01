@@ -4,6 +4,7 @@ output:
   flexdashboard::flex_dashboard:
     orientation: columns
     vertical_layout: fill
+    runtime: shiny
 ---
 
 ```{r setup, include=FALSE}
@@ -11,45 +12,93 @@ library(flexdashboard)
 library(fpp3)
 library(DT)
 library(scales)
-#canadian_gas <- canadian_gas[1:530,]
-canadian_gas <- as_tibble(canadian_gas)
-last_month <- max(canadian_gas$Month)
-last_vol <- canadian_gas%>%
-  filter(Month==max(Month))%>%
-  pull(Volume)
-prev_vol <- canadian_gas%>%
-  filter(Month==max(Month)-1)%>%
-  pull(Volume)
-gas_growth <- percent(last_vol/prev_vol-1, accuracy = .1)
-year_of_gas <- canadian_gas%>%
-  filter(Month>max(Month)-12)
-date_range <- range(year_of_gas$Month)
-mean_gas <- year_of_gas%>%
-  summarize(Volume=round(mean(Volume),3))%>%
-  pull(Volume)
+```
 
+Benefits of code based workflow
+========================================
+1.	Reproducibility:  a simple answer to “how did you get this result?”  If every step in the data pipeline (from raw data to finished output is code driven) then by reading (and possibly rerunning) the code you can get a definitive answer to where did this number come from.  Contrast this with a point and click, copy and paste workflow, where there are scant details of the origins of a number. 
+2.	Automation:  you do not need to redo analysis when new data arrives… simply rerun the code.
+3.	Who dashboards are for? Everyone: just an easy way to organize a lot of results where the user can easily find what they are looking for.  Plus  anytime you make an assumption (set the value of parameter in an analysis) you can use an input where the user can choose the value of that input (makes it easy for the user to do a sensitivity analysis.
+4.	Github:  have you ever inherited a project where the project directory is full of files where names (sort of) indicate versions e.g.  
+- analysis_01, 
+- analysis-02, 
+- analysis_final,
+- analysis_final_final, 
+- analysis_deal_with_comments, 
+- analysis_absolute_last_version,
+- analysis_#$%^&
+ 
+Github is just a centralized repository for files, where there is a single copy of each file in a project, but all previous versions are still available.  Github allows you to time travel:  You can either
+
+1.	reset all files in the project to a previous time period (when things worked), or
+2.	visit a previous time period and selectively grab a component of a file and bring it back to the future.  
+
+
+Canadian Gas
+==========================================
+
+Input {.sidebar}
+-------------------------------------------------------
+```{r}
+dateRangeInput(
+  "date_range",
+  "Select a range of dates",
+  start = min(canadian_gas$Month),
+  end = max(canadian_gas$Month),
+  min = min(canadian_gas$Month),
+  max = max(canadian_gas$Month),
+  format = "yyyy-mm",
+  startview = "year"
+)
+#reactive elements--------------------------
+
+reactive_gas <- reactive(canadian_gas%>%
+                           filter(Month>=min(input$date_range),
+                                  Month<=max(input$date_range))%>%
+                           as_tibble()
+                        )
+
+last_month <- reactive(max(reactive_gas()$Month))
+last_vol <- reactive(reactive_gas()%>%
+  filter(Month==max(Month))%>%
+  pull(Volume))
+prev_vol <- reactive(reactive_gas()%>%
+  filter(Month==max(Month)-1)%>%
+  pull(Volume))
+gas_growth <- reactive(percent(last_vol()/prev_vol()-1, accuracy = .1))
+year_of_gas <- reactive(reactive_gas()%>%
+  filter(Month>max(Month)-12))
+date_range <- reactive(range(year_of_gas()$Month))
+mean_gas <- reactive(year_of_gas()%>%
+  summarize(Volume=round(mean(Volume), 4))%>%
+  pull(Volume))
 
 ```
+
+
 
 Column {data-width=650}
 -----------------------------------------------------------------------
 
-### The monthly growth rate in `r last_month` was `r gas_growth`.
+### The monthly growth rate in `r renderText(as.character(last_month()))` was `r renderText(gas_growth())`.
 
 ```{r}
-ggplot(canadian_gas, aes(Month, Volume))+
+renderPlot(
+ggplot(reactive_gas(), aes(Month, Volume))+
   geom_line()
+)
 ```
 
 Column {data-width=350}
 -----------------------------------------------------------------------
 
-### The average volume over the period `r paste(date_range, collapse="--")` was `r mean_gas`.
+### The average volume over the period `r renderText(paste(date_range(), collapse="--"))` was `r renderText(mean_gas())`.
 
 ```{r}
-canadian_gas%>%
+renderDT(
+reactive_gas()%>%
   arrange(desc(Month))%>%
   mutate(Month=as.character(Month))%>%
   datatable()
-
+)
 ```
